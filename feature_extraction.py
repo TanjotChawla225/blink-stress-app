@@ -1,52 +1,66 @@
 import cv2
-import mediapipe as mp
 import numpy as np
 from scipy.signal import savgol_filter, find_peaks
 from scipy.stats import entropy
 
-mp_face = mp.solutions.face_mesh
+# Eye landmark indices
+LEFT_EYE = [36, 37, 38, 39, 40, 41]
+RIGHT_EYE = [42, 43, 44, 45, 46, 47]
+
+# EAR FUNCTION
+def eye_aspect_ratio(eye):
+    A = np.linalg.norm(eye[1] - eye[5])
+    B = np.linalg.norm(eye[2] - eye[4])
+    C = np.linalg.norm(eye[0] - eye[3])
+    ear = (A + B) / (2.0 * C)
+    return ear
+
 
 def extract_aperture_from_video(video_path):
+    detector = cv2.CascadeClassifier(cv2.data.haarcascades + "haarcascade_frontalface_default.xml")
+    landmark_model = cv2.face.createFacemarkLBF()
+    landmark_model.loadModel(cv2.data.haarcascades + "lbfmodel.yaml")
+
     cap = cv2.VideoCapture(video_path)
     aperture = []
-    fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
+    fps = cap.get(cv2.CAP_PROP_FPS) or 30
 
-    with mp_face.FaceMesh(static_image_mode=False, max_num_faces=1) as face_mesh:
-        while True:
-            ret, frame = cap.read()
-            if not ret:
-                break
+    while True:
+        ret, frame = cap.read()
+        if not ret:
+            break
 
-            rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            res = face_mesh.process(rgb)
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        faces = detector.detectMultiScale(gray, 1.1, 4)
 
-            if not res.multi_face_landmarks:
-                aperture.append(np.nan)
-                continue
+        if len(faces) == 0:
+            aperture.append(np.nan)
+            continue
 
-            lm = res.multi_face_landmarks[0]
-            h, w = frame.shape[:2]
+        _, landmarks = landmark_model.fit(gray, faces)
 
-            upper = [386, 387, 388]
-            lower = [159, 145, 153]
+        if len(landmarks) == 0:
+            aperture.append(np.nan)
+            continue
 
-            uy = np.mean([lm.landmark[i].y for i in upper]) * h
-            ly = np.mean([lm.landmark[i].y for i in lower]) * h
+        shape = landmarks[0][0]
 
-            aperture.append(ly - uy)
+        left_eye = shape[LEFT_EYE]
+        right_eye = shape[RIGHT_EYE]
+
+        ear = (eye_aspect_ratio(left_eye) + eye_aspect_ratio(right_eye)) / 2.0
+        aperture.append(ear)
 
     cap.release()
     return np.array(aperture), fps
 
 
 def extract_blink_features(ap, fps):
-
     ap = np.nan_to_num(ap, nan=np.nanmean(ap))
-
     smooth = savgol_filter(ap, 11, 3)
     inv = -smooth
 
-    peaks, _ = find_peaks(inv, height=np.std(inv)*0.5, distance=int(0.1*fps))
+    peaks, _ = find_peaks(inv, height=np.std(inv)*0.5, distance=int(fps*0.1))
 
     blink_times = peaks / fps
     blink_durations = []
@@ -54,7 +68,7 @@ def extract_blink_features(ap, fps):
 
     for p in peaks:
         blink_amplitudes.append(inv[p])
-        blink_durations.append(0.06)  # approx 60ms
+        blink_durations.append(0.06)
 
     if len(blink_times) < 2:
         ibi = [0]
