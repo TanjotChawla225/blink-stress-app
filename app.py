@@ -35,6 +35,6 @@ if uploaded_file is not None:
 
     st.subheader("Prediction")
     if pred == 1:
-        st.error("😟 Stress Detected")
+        st.error(" HIGH AROUSAL !!")
     else:
-        st.success("😌 Relaxed State")
+        st.success("LOW AROUSAL :D")
