@@ -4,7 +4,7 @@ import joblib
 import tempfile
 from feature_extraction import extract_aperture_from_video, extract_blink_features
 
-st.title("Blink-Based Emotion Detection App(high or low arousal emotions")
+st.title("Blink-Based Emotion Detection App(high or low arousal emotions)")
 st.write(" High Arousal like admiration , amusement, excitement , fear and Low Arousal like boredom , confusion, calmness, relief")
 st.write("Upload a 4–5 second video showing your face and eyes.")
 
